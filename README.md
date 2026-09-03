@@ -1,95 +1,244 @@
-# AI Crew for Trip Planning
-## Introduction
-This project is an example using the CrewAI framework to automate the process of planning a trip if you are in doubt between different options. CrewAI orchestrates autonomous AI agents, enabling them to collaborate and execute complex tasks efficiently.
+# 🧠 Attack on Reflexion — Adversarial Robustness of Self-Reflecting Multi-Agent Systems
 
-By [@joaomdmoura](https://x.com/joaomdmoura)
+> **MTP Research Project** — Investigating the robustness of Reflexion-augmented multi-agent LLM systems against adversarial attacks.
 
-- [CrewAI Framework](#crewai-framework)
-- [Running the script](#running-the-script)
-- [Details & Explanation](#details--explanation)
-- [Using GPT 3.5](#using-gpt-35)
-- [Using Local Models with Ollama](#using-local-models-with-ollama)
-- [Contributing](#contributing)
-- [Support and Contact](#support-and-contact)
-- [License](#license)
+## 📖 Overview
 
-## CrewAI Framework
-CrewAI is designed to facilitate the collaboration of role-playing AI agents. In this example, these agents work together to choose between different of cities and put together a full itinerary for the trip based on your preferences.
+This project implements the **Reflexion Algorithm** (Shinn et al., 2023) on top of a **CrewAI-based multi-agent trip planner** and studies its robustness against adversarial manipulation. The system uses multiple collaborating LLM agents — each with a distinct role — that plan a travel itinerary, self-evaluate using a hybrid evaluator, and iteratively improve via self-reflection stored in a persistent vector memory.
 
-## Running the Script
-It uses GPT-4 by default so you should have access to that to run it.
+The long-term goal is to **attack** this self-improvement loop: can adversarial inputs poison the reflection memory, mislead the evaluator, or degrade the agent pipeline — and can the system defend itself?
 
-***Disclaimer:** This will use gpt-4 unless you changed it 
-not to, and by doing so it will cost you money.*
+---
 
-- **Configure Environment**: Copy ``.env.example` and set up the environment variables for [Browseless](https://www.browserless.io/), [Serper](https://serper.dev/) and [OpenAI](https://platform.openai.com/api-keys)
-- **Install Dependencies**: Run `poetry install --no-root`.
-- **Execute the Script**: Run `poetry run python main.py` and input your idea.
+## 🏗️ Architecture
 
-## Details & Explanation
-- **Running the Script**: Execute `python main.py`` and input your idea when prompted. The script will leverage the CrewAI framework to process the idea and generate a landing page.
-- **Key Components**:
-  - `./main.py`: Main script file.
-  - `./trip_tasks.py`: Main file with the tasks prompts.
-  - `./trip_agents.py`: Main file with the agents creation.
-  - `./tools`: Contains tool classes used by the agents.
-
-## Using GPT 3.5
-CrewAI allow you to pass an llm argument to the agent constructor, that will be it's brain, so changing the agent to use GPT-3.5 instead of GPT-4 is as simple as passing that argument on the agent you want to use that LLM (in `main.py`).
-```python
-from langchain.chat_models import ChatOpenAI
-
-llm = ChatOpenAI(model='gpt-3.5') # Loading GPT-3.5
-
-def local_expert(self):
-	return Agent(
-		role='Local Expert at this city',
-		goal='Provide the BEST insights about the selected city',
-		backstory="""A knowledgeable local guide with extensive information
-		about the city, it's attractions and customs""",
-		tools=[
-			SearchTools.search_internet,
-			BrowserTools.scrape_and_summarize_website,
-		],
-		llm=llm, # <----- passing our llm reference here
-		verbose=True
-	)
+```
+┌──────────────────────────────────────────────────────────┐
+│                    Trip Planner Crew                      │
+│                                                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────┐  │
+│  │ City Selector │──│ Local Expert │──│ Travel         │  │
+│  │    Agent      │  │    Agent     │  │ Concierge      │  │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬─────────┘  │
+│         │                 │                  │            │
+│    Search Tool       Search Tool        Search Tool      │
+│    Browser Tool      Browser Tool       Browser Tool     │
+│                                         Calculator       │
+└──────────────────────┬───────────────────────────────────┘
+                       │ Output
+                       ▼
+              ┌────────────────┐
+              │   Evaluator    │
+              │ (Heuristic +   │
+              │  LLM Judge)    │
+              └───────┬────────┘
+                      │ Eval Result
+                      ▼
+              ┌────────────────┐
+              │   Reflexion    │
+              │   Memory (M_sr)│        ◄── ChromaDB
+              │   Self-Reflect │            (Persistent)
+              └───────┬────────┘
+                      │ Lessons
+                      ▼
+               Next Trial (retry with reflections injected)
 ```
 
-## Using Local Models with Ollama
-The CrewAI framework supports integration with local models, such as Ollama, for enhanced flexibility and customization. This allows you to utilize your own models, which can be particularly useful for specialized tasks or data privacy concerns.
+### Agents
 
-### Setting Up Ollama
-- **Install Ollama**: Ensure that Ollama is properly installed in your environment. Follow the installation guide provided by Ollama for detailed instructions.
-- **Configure Ollama**: Set up Ollama to work with your local model. You will probably need to [tweak the model using a Modelfile](https://github.com/jmorganca/ollama/blob/main/docs/modelfile.md), I'd recommend adding `Observation` as a stop word and playing with `top_p` and `temperature`.
+| Agent | Role | Tools |
+|-------|------|-------|
+| **City Selection Expert** | Analyze weather, costs, and events to select the best destination | `SearchTools`, `BrowserTools` |
+| **Local Expert** | Provide in-depth local knowledge, hidden gems, cultural insights | `SearchTools`, `BrowserTools` |
+| **Travel Concierge** | Build a detailed day-by-day itinerary with budget and packing list | `SearchTools`, `BrowserTools`, `CalculatorTools` |
 
-### Integrating Ollama with CrewAI
-- Instantiate Ollama Model: Create an instance of the Ollama model. You can specify the model and the base URL during instantiation. For example:
+### Tools
 
-```python
-from langchain.llms import Ollama
-ollama_openhermes = Ollama(model="agent")
-# Pass Ollama Model to Agents: When creating your agents within the CrewAI framework, you can pass the Ollama model as an argument to the Agent constructor. For instance:
+- **SearchTools** (`tools/search_tools.py`) — LLM-powered internet-style knowledge retrieval
+- **BrowserTools** (`tools/browser_tools.py`) — Website scraping and summarization using `unstructured`
+- **CalculatorTools** (`tools/calculator_tools.py`) — Safe mathematical expression evaluation via AST parsing
 
-def local_expert(self):
-	return Agent(
-		role='Local Expert at this city',
-		goal='Provide the BEST insights about the selected city',
-		backstory="""A knowledgeable local guide with extensive information
-		about the city, it's attractions and customs""",
-		tools=[
-			SearchTools.search_internet,
-			BrowserTools.scrape_and_summarize_website,
-		],
-		llm=ollama_openhermes, # Ollama model passed here
-		verbose=True
-	)
+---
+
+## 🔄 Reflexion Loop (Algorithm 1)
+
+Based on [Shinn et al., 2023 — *"Reflexion: Language Agents with Verbal Reinforcement Learning"*](https://arxiv.org/abs/2303.11366):
+
+1. **Trial 0**: Run the multi-agent crew to produce an itinerary
+2. **Evaluate**: Score the output using a hybrid evaluator (heuristic checks + LLM judge)
+3. **Reflect**: If the trial failed, a self-reflection model (`M_sr`) analyzes root causes and generates actionable lessons
+4. **Store**: Reflections are persisted in **ChromaDB** (vector similarity) for retrieval in future trials
+5. **Retry**: Inject past reflections as context into the next trial's agent prompts
+6. **Repeat** until the output passes all checks or max retries are exhausted
+
+### Reflexion Memory (`reflexion_memory.py`)
+
+- **Embedding**: `nomic-embed-text` via Ollama with retry logic and exponential backoff
+- **Storage**: ChromaDB persistent client with similarity-based retrieval
+- **Session Memory**: In-memory buffer of current-session reflections for multi-trial loops
+- **LLM Backbone**: `qwen2.5:7b` via Ollama (fully local, no API keys required)
+
+---
+
+## 📊 Evaluation System (`evaluator.py`)
+
+A two-layer evaluator combining deterministic checks with LLM-based judgment:
+
+### Heuristic Checks (Deterministic)
+| Check | Description |
+|-------|-------------|
+| `budget_ok` | Extracts budget constraints from input and verifies output totals don't exceed them |
+| `days_ok` | Parses expected trip length and counts day markers in output (±1 tolerance) |
+| `no_duplicates` | Detects repeated venues across different days using NLP-based venue extraction |
+
+### LLM Judge (Semantic)
+| Check | Description |
+|-------|-------------|
+| `constraints_ok` | Verifies all stated constraints (dietary, mobility, dates, origin) are honored |
+| `feasible` | Checks for realistic scheduling (no impossible same-day cross-country travel) |
+| `no_hallucination` | Validates that named venues/restaurants/hotels are plausible for the stated city |
+
+The judge uses **llama3.1:8b** (intentionally different from the agent model to avoid self-grading bias).
+
+---
+
+## 🧪 Benchmarking
+
+### Reflexion-Only Benchmark (`benchmark_reflexion_only.py`)
+
+Runs each test case through the Reflexion loop with up to 3 retry trials:
+
+```bash
+python benchmark_reflexion_only.py
 ```
 
-### Advantages of Using Local Models
-- **Privacy**: Local models allow processing of data within your own infrastructure, ensuring data privacy.
-- **Customization**: You can customize the model to better suit the specific needs of your tasks.
-- **Performance**: Depending on your setup, local models can offer performance benefits, especially in terms of latency.
+**Outputs:**
+- `benchmark_reflexion_only.csv` — Per-trial results
+- `benchmark_reflexion_only.json` — Detailed JSON results
+- `traces_reflexion_only/` — Full traces (crew output, eval result, reflections) for each trial
 
-## License
+### Memory Comparison Benchmark (`benchmark_memory_comparison.py`)
+
+Compares **memory-enabled** vs **memory-disabled** configurations across test cases:
+
+```bash
+python benchmark_memory_comparison.py
+```
+
+**Metrics tracked:**
+- Pass@1 rate (eventual pass across any trial)
+- Per-check pass rates
+- Accuracy progression across trials
+- Execution time statistics
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- **Python** 3.10–3.11
+- **Ollama** running locally with the following models pulled:
+  ```bash
+  ollama pull qwen2.5:7b
+  ollama pull llama3.1:8b
+  ollama pull nomic-embed-text
+  ```
+
+### Installation
+
+```bash
+# Clone the repo
+git clone https://github.com/Sethayan/Attack_on_Reflextion.git
+cd Attack_on_Reflextion
+
+# Install dependencies
+pip install -e .
+# or with uv
+uv sync
+
+# Copy environment file
+cp .env.example .env
+```
+
+### Running the Trip Planner
+
+```bash
+python main.py
+```
+
+This runs the full pipeline: agents → evaluator → reflexion → output.
+
+### Running Benchmarks
+
+```bash
+# Reflexion-only benchmark
+python benchmark_reflexion_only.py
+
+# Memory comparison benchmark
+python benchmark_memory_comparison.py
+```
+
+---
+
+## 📁 Project Structure
+
+```
+.
+├── main.py                         # Entry point — runs the trip planner crew
+├── trip_agents.py                  # Agent definitions (City Selector, Local Expert, Concierge)
+├── trip_tasks.py                   # Task prompts with reflexion context injection
+├── reflexion_memory.py             # Reflexion Memory system (ChromaDB + Ollama embeddings)
+├── evaluator.py                    # Hybrid evaluator (heuristic + LLM judge)
+├── benchmark_reflexion_only.py     # Benchmark: Reflexion Algorithm 1 trials
+├── benchmark_memory_comparison.py  # Benchmark: Memory-enabled vs disabled
+├── validate_judge.py               # Validation script for the LLM judge
+├── tools/
+│   ├── search_tools.py             # LLM-powered search tool
+│   ├── browser_tools.py            # Website scraping & summarization tool
+│   └── calculator_tools.py         # Safe math calculator tool
+├── pyproject.toml                  # Project dependencies
+└── uv.lock                        # Dependency lock file
+```
+
+---
+
+## 🎯 Future Work — Adversarial Attacks on Reflexion
+
+The core research goal is to **attack** the Reflexion loop and study failure modes:
+
+### Phase 1: Memory Poisoning Attacks
+- **Reflection Injection**: Craft adversarial reflections that, once stored in ChromaDB, mislead future trials into producing worse outputs
+- **Embedding Space Attacks**: Manipulate embeddings so that irrelevant or harmful reflections are retrieved as "most relevant"
+- **Temporal Poisoning**: Gradually degrade memory quality over successive runs
+
+### Phase 2: Evaluator Adversarial Attacks
+- **Judge Manipulation**: Craft outputs that fool the LLM judge into giving false positives (passing bad itineraries)
+- **Heuristic Evasion**: Generate outputs that pass heuristic checks (correct day count, budget format) while being semantically nonsensical
+- **Evaluator Disagreement**: Exploit gaps between heuristic and LLM-based evaluation
+
+### Phase 3: Agent Pipeline Attacks
+- **Prompt Injection via Tools**: Inject adversarial content through the browser/search tools that derails agent behavior
+- **Inter-Agent Poisoning**: Manipulate the output of one agent to corrupt downstream agents
+- **Context Window Overflow**: Flood the reflexion context with noise to dilute useful lessons
+
+### Phase 4: Defense Mechanisms
+- **Reflection Verification**: Validate stored reflections before injection
+- **Memory Sanitization**: Detect and filter poisoned reflections
+- **Robust Evaluation**: Ensemble evaluators with disagreement detection
+- **Adversarial Training**: Harden agents against known attack vectors
+
+---
+
+## 📚 References
+
+- Shinn, N., Cassano, F., Gopinath, A., Narasimhan, K., & Yao, S. (2023). [Reflexion: Language Agents with Verbal Reinforcement Learning](https://arxiv.org/abs/2303.11366). *NeurIPS 2023*.
+- [CrewAI Framework](https://github.com/crewAIInc/crewAI) — Multi-agent orchestration
+- [Ollama](https://ollama.ai/) — Local LLM inference
+- [ChromaDB](https://www.trychroma.com/) — Vector database for reflection storage
+
+---
+
+## 📄 License
+
 This project is released under the MIT License.
