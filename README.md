@@ -203,33 +203,6 @@ python benchmark_memory_comparison.py
 
 ---
 
-## 🎯 Future Work — Adversarial Attacks on Reflexion
-
-The core research goal is to **attack** the Reflexion loop and study failure modes:
-
-### Phase 1: Memory Poisoning Attacks
-- **Reflection Injection**: Craft adversarial reflections that, once stored in ChromaDB, mislead future trials into producing worse outputs
-- **Embedding Space Attacks**: Manipulate embeddings so that irrelevant or harmful reflections are retrieved as "most relevant"
-- **Temporal Poisoning**: Gradually degrade memory quality over successive runs
-
-### Phase 2: Evaluator Adversarial Attacks
-- **Judge Manipulation**: Craft outputs that fool the LLM judge into giving false positives (passing bad itineraries)
-- **Heuristic Evasion**: Generate outputs that pass heuristic checks (correct day count, budget format) while being semantically nonsensical
-- **Evaluator Disagreement**: Exploit gaps between heuristic and LLM-based evaluation
-
-### Phase 3: Agent Pipeline Attacks
-- **Prompt Injection via Tools**: Inject adversarial content through the browser/search tools that derails agent behavior
-- **Inter-Agent Poisoning**: Manipulate the output of one agent to corrupt downstream agents
-- **Context Window Overflow**: Flood the reflexion context with noise to dilute useful lessons
-
-### Phase 4: Defense Mechanisms
-- **Reflection Verification**: Validate stored reflections before injection
-- **Memory Sanitization**: Detect and filter poisoned reflections
-- **Robust Evaluation**: Ensemble evaluators with disagreement detection
-- **Adversarial Training**: Harden agents against known attack vectors
-
----
-
 ## 📚 References
 
 - Shinn, N., Cassano, F., Gopinath, A., Narasimhan, K., & Yao, S. (2023). [Reflexion: Language Agents with Verbal Reinforcement Learning](https://arxiv.org/abs/2303.11366). *NeurIPS 2023*.
