@@ -4,7 +4,6 @@ import os
 import sys
 import time
 from collections import defaultdict
-from textwrap import dedent
 from datetime import datetime, timezone
 from typing import Dict, List
 
@@ -180,32 +179,23 @@ def run_reflexion(test_case: dict, max_trials: int = MAX_TRIALS) -> List[dict]:
     trial_results = []
 
     
-    print(f"\n    📌 Trial 0 (initial trajectory)...")
+    print(f"\n     Trial 0 (initial trajectory)...")
 
     
-    past_reflections = memory.retrieve_relevant(task_desc)
-    reflexion_context = ""
-    if past_reflections:
-        lessons = "\n---\n".join(past_reflections)
-        reflexion_context = dedent(f"""\
-
-            === LESSONS FROM PREVIOUS RUNS ===
-            {lessons}
-            === END OF LESSONS ===
-
-        """)
+    # Use the deduplicated, capped context builder (pulls from long-term ChromaDB)
+    reflexion_context = memory.build_reflexion_context(task_desc)
 
     start = time.time()
     try:
         output = _run_single_crew(test_case, reflexion_context=reflexion_context)
     except Exception as e:
-        print(f"    ❌ Trial 0 FAILED: {e}")
+        print(f"     Trial 0 FAILED: {e}")
         output = f"[ERROR] Crew run failed: {e}"
     elapsed = time.time() - start
 
     
     eval_result = evaluate(task_input, output)
-    print(f"    📊 Trial 0: accuracy={eval_result['accuracy']:.2f}, "
+    print(f"     Trial 0: accuracy={eval_result['accuracy']:.2f}, "
           f"pass={eval_result['overall_pass']}")
 
     trial_results.append({
@@ -223,7 +213,7 @@ def run_reflexion(test_case: dict, max_trials: int = MAX_TRIALS) -> List[dict]:
    
     reflection_text = ""
     if not eval_result["overall_pass"]:
-        print(f"    🪞 Generating self-reflection sr_0...")
+        print(f"     Generating self-reflection sr_0...")
         reflection_text = memory.reflect(task_desc, output, eval_result)
         memory.store(task_desc, output, reflection_text, eval_result)
 
@@ -237,50 +227,23 @@ def run_reflexion(test_case: dict, max_trials: int = MAX_TRIALS) -> List[dict]:
     t = 0
     while not eval_result["overall_pass"] and t < max_trials:
         t += 1
-        print(f"\n    📌 Trial {t}/{max_trials} (reflexion retry)...")
+        print(f"\n     Trial {t}/{max_trials} (reflexion retry)...")
 
-        
-        session_refs = memory.get_session_reflections()
-        if session_refs:
-            lessons = "\n---\n".join(session_refs)
-            reflexion_context = dedent(f"""\
-
-                === SELF-REFLECTIONS FROM PREVIOUS TRIALS ===
-                The following are your own self-critiques from prior attempts
-                at this SAME task. Use them to fix your mistakes:
-
-                {lessons}
-
-                === END OF SELF-REFLECTIONS ===
-
-            """)
-        else:
-            reflexion_context = ""
-
-        
-        long_term = memory.retrieve_relevant(task_desc)
-        if long_term:
-            lt_text = "\n---\n".join(long_term)
-            reflexion_context += dedent(f"""\
-
-                === LESSONS FROM EXPERIENCE (LONG-TERM MEMORY) ===
-                {lt_text}
-                === END OF LESSONS ===
-
-            """)
+        # Use the deduplicated, capped context builder
+        reflexion_context = memory.build_reflexion_context(task_desc)
 
         
         start = time.time()
         try:
             output = _run_single_crew(test_case, reflexion_context=reflexion_context)
         except Exception as e:
-            print(f"    ❌ Trial {t} FAILED: {e}")
+            print(f"     Trial {t} FAILED: {e}")
             output = f"[ERROR] Crew run failed: {e}"
         elapsed = time.time() - start
 
     
         eval_result = evaluate(task_input, output)
-        print(f"    📊 Trial {t}: accuracy={eval_result['accuracy']:.2f}, "
+        print(f"     Trial {t}: accuracy={eval_result['accuracy']:.2f}, "
               f"pass={eval_result['overall_pass']}")
 
         trial_results.append({
@@ -341,7 +304,7 @@ def print_summary(all_results: list):
     print(f"  {'─'*5} {'─'*7} {'─'*6} {'─'*10} {'─'*8} {'─'*30}")
 
     for r in all_results:
-        passed = "✅" if r["overall_pass"] else "❌"
+        passed = "Yes" if r["overall_pass"] else "NO"
         failures = r["failure_reasons"][:50] if r["failure_reasons"] else "—"
         print(f"  {r['test_case']:<5} {r['trial']:<7} {passed:<6} "
               f"{r['accuracy']:<10.4f} {r['execution_time_s']:<8} {failures}")
@@ -405,8 +368,8 @@ if __name__ == "__main__":
 
     # Final save
     save_results_incremental(all_results)
-    print(f"\n📄 CSV saved to {CSV_FILE}")
-    print(f"📄 JSON saved to {JSON_FILE}")
-    print(f"📁 Traces saved to {TRACES_DIR}/")
+    print(f"\n CSV saved to {CSV_FILE}")
+    print(f" JSON saved to {JSON_FILE}")
+    print(f" Traces saved to {TRACES_DIR}/")
 
     print_summary(all_results)

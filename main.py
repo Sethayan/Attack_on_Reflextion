@@ -1,5 +1,4 @@
 from crewai import Crew
-from textwrap import dedent
 from trip_agents import TripAgents
 from trip_tasks import TripTasks
 from reflexion_memory import ReflexionMemory
@@ -33,20 +32,7 @@ class TripCrew:
         )
 
         past_reflections = memory.retrieve_relevant(task_description)
-        reflexion_context = ""
-        if past_reflections:
-            lessons = "\n---\n".join(past_reflections)
-            reflexion_context = dedent(f"""\
-
-                === LESSONS FROM PREVIOUS RUNS ===
-                The following reflections were generated from prior trip-planning
-                runs. Use them to avoid past mistakes and improve your output:
-
-                {lessons}
-
-                === END OF LESSONS ===
-
-            """)
+        reflexion_context = memory.build_reflexion_context(task_description)
     
 
         identify_task = tasks.identify_task(

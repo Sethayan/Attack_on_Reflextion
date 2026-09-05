@@ -1,6 +1,8 @@
+import hashlib
 import time
 import uuid
 from datetime import datetime, timezone
+from textwrap import dedent
 from typing import Dict, List, Optional
 
 import chromadb
@@ -59,7 +61,11 @@ class OllamaEmbeddingWithTimeout(EmbeddingFunction[Documents]):
 
 
 class ReflexionMemory:
-   
+    # Maximum number of reflections to inject into agent context.
+    # Matches Omega=1-3 from Shinn et al. (2023).
+    MAX_REFLECTIONS = 3
+    # Maximum session reflections to keep (sliding window).
+    MAX_SESSION = 2
 
     def __init__(
         self,
@@ -78,18 +84,17 @@ class ReflexionMemory:
             max_retries=3,
         )
 
-    
         self._client = chromadb.PersistentClient(path=persist_dir)
         self._collection = self._client.get_or_create_collection(
             name=collection_name,
             embedding_function=self._embedding_fn,
         )
 
-        
         self._llm = LLM(model=llm_model, base_url=ollama_url)
 
-        
         self._session_reflections: List[str] = []
+        # Track content hashes to avoid storing duplicate reflections
+        self._seen_hashes: set = set()
 
     
 
@@ -122,12 +127,13 @@ class ReflexionMemory:
                 eval_feedback += "All checks passed.\n"
             eval_feedback += "=== END EVALUATOR FEEDBACK ===\n"
 
-        
+        # Only include the last MAX_SESSION reflections to avoid bloat
         mem_context = ""
         if self._session_reflections:
+            recent = self._session_reflections[-self.MAX_SESSION:]
             mem_context = (
                 "\n=== PREVIOUS REFLECTIONS IN THIS SESSION ===\n"
-                + "\n---\n".join(self._session_reflections[-3:])  
+                + "\n---\n".join(recent)
                 + "\n=== END PREVIOUS REFLECTIONS ===\n"
             )
 
@@ -154,6 +160,11 @@ class ReflexionMemory:
 
    
 
+    @staticmethod
+    def _content_hash(text: str) -> str:
+        """Return a short hash of the reflection text for dedup."""
+        return hashlib.sha256(text.strip().encode()).hexdigest()[:16]
+
     def store(
         self,
         task_description: str,
@@ -161,7 +172,13 @@ class ReflexionMemory:
         reflection: str,
         eval_result: Optional[Dict] = None,
     ) -> str:
-        
+        # Deduplicate: skip if we've already stored identical content
+        h = self._content_hash(reflection)
+        if h in self._seen_hashes:
+            print("      [dedup] Identical reflection already stored, skipping.")
+            return ""
+        self._seen_hashes.add(h)
+
         doc_id = str(uuid.uuid4())
 
         metadata = {
@@ -173,7 +190,6 @@ class ReflexionMemory:
             metadata["accuracy"] = str(eval_result.get("accuracy", ""))
             metadata["overall_pass"] = str(eval_result.get("overall_pass", ""))
 
-    
         try:
             self._collection.add(
                 documents=[reflection],
@@ -183,10 +199,11 @@ class ReflexionMemory:
         except Exception as e:
             print(f"      ChromaDB store failed: {e}")
             print(f"      Reflection saved to session memory only (not persisted).")
-            
 
-        
+        # Keep session buffer capped at MAX_SESSION
         self._session_reflections.append(reflection)
+        if len(self._session_reflections) > self.MAX_SESSION:
+            self._session_reflections = self._session_reflections[-self.MAX_SESSION:]
 
         return doc_id
 
@@ -213,13 +230,63 @@ class ReflexionMemory:
             print(f"      ChromaDB retrieval failed: {e}")
             return []
 
-    def get_session_reflections(self) -> List[str]:
-        """Return all reflections stored in the current session (mem)."""
-        return list(self._session_reflections)
+    def get_session_reflections(self, max_n: Optional[int] = None) -> List[str]:
+        """Return the most recent session reflections, capped at max_n."""
+        n = max_n or self.MAX_SESSION
+        return list(self._session_reflections[-n:])
 
     def clear_session(self):
         """Clear the in-memory session reflections for a fresh run."""
         self._session_reflections.clear()
+        self._seen_hashes.clear()
+
+    def build_reflexion_context(
+        self,
+        task_description: str,
+        max_reflections: Optional[int] = None,
+    ) -> str:
+        """Build a deduplicated, capped reflexion context string.
+
+        Merges session reflections (current task retries) with
+        long-term ChromaDB reflections (cross-task experience),
+        deduplicates by content hash, and caps at MAX_REFLECTIONS.
+        Returns an empty string if no reflections are available.
+        """
+        cap = max_reflections or self.MAX_REFLECTIONS
+
+        # 1. Session reflections first (most relevant — same task retries)
+        session = self.get_session_reflections()
+
+        # 2. Long-term from ChromaDB
+        long_term = self.retrieve_relevant(task_description, n_results=cap)
+
+        # 3. Merge and deduplicate by content hash
+        seen = set()
+        merged = []
+        for ref in session + long_term:
+            h = self._content_hash(ref)
+            if h not in seen:
+                seen.add(h)
+                merged.append(ref)
+            if len(merged) >= cap:
+                break
+
+        if not merged:
+            return ""
+
+        lessons = "\n---\n".join(merged)
+        return dedent(f"""\
+
+            === SELF-REFLECTIONS FROM PREVIOUS TRIALS ===
+            The following are self-critiques from prior attempts.
+            Use them to fix past mistakes and improve your output.
+            (Showing {len(merged)} of {len(session) + len(long_term)} available)
+
+            {lessons}
+
+            === END OF SELF-REFLECTIONS ===
+
+        """)
 
     def reflect_and_store(
         self,
@@ -227,7 +294,7 @@ class ReflexionMemory:
         output: str,
         eval_result: Optional[Dict] = None,
     ) -> str:
-        
+        """Generate a reflection and store it (deduped)."""
         reflection = self.reflect(task_description, output, eval_result)
         doc_id = self.store(task_description, output, reflection, eval_result)
         return doc_id
