@@ -1,0 +1,32 @@
+
+======================================================================
+  REFLEXION-ONLY SUMMARY
+======================================================================
+
+  Pass@1 (eventual pass any trial): 1/1 = 1.0000
+
+  TC    Trial   Pass   Accuracy   Time(s)  Failures
+  ───── ─────── ────── ────────── ──────── ──────────────────────────────
+  1     0       NO     0.8000     167.0    no_duplicates: Duplicate venues across days: 'acti
+  1     1       Yes    1.0000     242.9    —
+
+  ────────────────────────────────────────────────────────────
+  ACCURACY PROGRESSION:
+
+  TC 1: 0.80 → 1.00  (best: 1.00)
+
+  ────────────────────────────────────────────────────────────
+  PER-CHECK PASS RATE (best trial per TC):
+
+  Check                Pass rate   
+  ──────────────────── ────────────
+  budget_ok            N/A         
+  days_ok              1/1         
+  no_duplicates        1/1         
+  constraints_ok       1/1         
+  feasible             1/1         
+  no_hallucination     1/1         
+
+  ────────────────────────────────────────────────────────────
+  Avg time per trial:  204.9s
+  Total benchmark time: 409.9s

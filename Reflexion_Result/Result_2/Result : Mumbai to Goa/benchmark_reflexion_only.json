@@ -1,0 +1,50 @@
+[
+  {
+    "test_case": 1,
+    "trial": 0,
+    "overall_pass": false,
+    "accuracy": 0.8,
+    "checks_passed": 4,
+    "checks_applicable": 5,
+    "failure_reasons": "no_duplicates: Duplicate venues across days: 'activity' in ['day 1', 'day 2', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7']; 'destination' in ['day 1', 'day 2', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7']; 'dinner' in ['day 1', 'day 3', 'day 4', 'day 5']",
+    "execution_time_s": 237.0,
+    "budget_ok": "not_applicable",
+    "days_ok": true,
+    "no_duplicates": false,
+    "constraints_ok": true,
+    "feasible": true,
+    "no_hallucination": true
+  },
+  {
+    "test_case": 1,
+    "trial": 1,
+    "overall_pass": false,
+    "accuracy": 0.8,
+    "checks_passed": 4,
+    "checks_applicable": 5,
+    "failure_reasons": "no_duplicates: Duplicate venues across days: 'activity' in ['day 1', 'day 2', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7']; 'weather' in ['day 1', 'day 2', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7']; 'place to eat' in ['day 1', 'day 2', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7']",
+    "execution_time_s": 834.8,
+    "budget_ok": "not_applicable",
+    "days_ok": true,
+    "no_duplicates": false,
+    "constraints_ok": true,
+    "feasible": true,
+    "no_hallucination": true
+  },
+  {
+    "test_case": 1,
+    "trial": 2,
+    "overall_pass": false,
+    "accuracy": 0.8,
+    "checks_passed": 4,
+    "checks_applicable": 5,
+    "failure_reasons": "no_duplicates: Duplicate venues across days: 'activity' in ['day 1', 'day 2', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7']; 'weather' in ['day 1', 'day 2', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7']; 'budget' in ['day 1', 'day 2', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7']",
+    "execution_time_s": 284.1,
+    "budget_ok": "not_applicable",
+    "days_ok": true,
+    "no_duplicates": false,
+    "constraints_ok": true,
+    "feasible": true,
+    "no_hallucination": true
+  }
+]

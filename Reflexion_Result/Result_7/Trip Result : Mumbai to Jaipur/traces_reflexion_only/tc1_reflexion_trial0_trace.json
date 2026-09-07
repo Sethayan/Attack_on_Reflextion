@@ -1,0 +1,26 @@
+{
+  "test_case_id": 1,
+  "trial": 0,
+  "timestamp": "2026-09-07T02:59:12.694931+00:00",
+  "eval_result": {
+    "overall_pass": false,
+    "accuracy": 0.8,
+    "checks_passed": 4,
+    "checks_applicable": 5,
+    "failure_reasons": [
+      "no_duplicates: Duplicate venues across days: 'sakina' in ['day 1', 'day 3', 'day 6']; 'activity' in ['day 1', 'day 2', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7', 'day 8']; 'venue' in ['day 1', 'day 2', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7', 'day 8']"
+    ],
+    "budget_ok": "not_applicable",
+    "budget_reason": "No budget specified in input.",
+    "days_ok": true,
+    "days_reason": "",
+    "no_duplicates": false,
+    "no_duplicates_reason": "Duplicate venues across days: 'sakina' in ['day 1', 'day 3', 'day 6']; 'activity' in ['day 1', 'day 2', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7', 'day 8']; 'venue' in ['day 1', 'day 2', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7', 'day 8']",
+    "constraints_ok": true,
+    "feasible": true,
+    "no_hallucination": true,
+    "judge_notes": ""
+  },
+  "crew_output_length": 5994,
+  "reflection_preview": "### Reflection\n\n**1. What Went Well:**\n   - The general itinerary seems well-structured with diverse activities catering to historical, cultural, and experiential interests.\n   - The selection of venues like the City Palace, Amber Fort, and Hawa Mahal aligns well with the cultural and historical preferences.\n   - A mix of indoor and outdoor activities, coupled with diverse meals, provides a balanced and enriching experience.\n\n**2. Root Cause Analysis:**\n   - **Duplicate Venues Across Days:** \n     - The root cause appears to be a lack of careful planning and thorough check-in to ensure no venue or activity is repeated. The system might be underestimating the importance of activity and venue uniqueness in ensuring a varied trip.\n   - **Failed Checks Identification:**\n     - The system likely missed initial or regular checks to validate the trip plan for duplicates.\n\n**3. Specific Fixes for Next Attempt:**\n   - **Implement a Duplication Check Mechanism:** \n     - Before finalizing the tr"
+}

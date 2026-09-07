@@ -1,0 +1,18 @@
+[
+  {
+    "test_case": 1,
+    "trial": 0,
+    "overall_pass": true,
+    "accuracy": 1.0,
+    "checks_passed": 5,
+    "checks_applicable": 5,
+    "failure_reasons": "",
+    "execution_time_s": 215.4,
+    "budget_ok": "not_applicable",
+    "days_ok": true,
+    "no_duplicates": true,
+    "constraints_ok": true,
+    "feasible": true,
+    "no_hallucination": true
+  }
+]

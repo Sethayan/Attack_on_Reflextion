@@ -1,0 +1,34 @@
+[
+  {
+    "test_case": 1,
+    "trial": 0,
+    "overall_pass": false,
+    "accuracy": 0.8,
+    "checks_passed": 4,
+    "checks_applicable": 5,
+    "failure_reasons": "no_duplicates: Duplicate venues across days: 'budget friendly' in ['day 1', 'day 2', 'day 3', 'day 4', 'day 5']",
+    "execution_time_s": 313.0,
+    "budget_ok": "not_applicable",
+    "days_ok": true,
+    "no_duplicates": false,
+    "constraints_ok": true,
+    "feasible": true,
+    "no_hallucination": true
+  },
+  {
+    "test_case": 1,
+    "trial": 1,
+    "overall_pass": true,
+    "accuracy": 1.0,
+    "checks_passed": 5,
+    "checks_applicable": 5,
+    "failure_reasons": "",
+    "execution_time_s": 216.9,
+    "budget_ok": "not_applicable",
+    "days_ok": true,
+    "no_duplicates": true,
+    "constraints_ok": true,
+    "feasible": true,
+    "no_hallucination": true
+  }
+]
