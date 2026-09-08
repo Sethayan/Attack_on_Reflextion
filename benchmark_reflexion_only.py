@@ -25,20 +25,102 @@ load_dotenv()
 MAX_TRIALS = 3  
 
 TEST_CASES = [
+   
     {
         "id": 1,
-        "origin": "Mumbai",
-        "cities": "Paris, Rome, Barcelona",
-        "date_range": "June 1-7, 2026",
-        "interests": "art, food, history",
-    },
-    {
-        "id": 2,
         "origin": "London",
         "cities": "Lisbon, Athens, Istanbul",
         "date_range": "September 1-5, 2026",
         "interests": "beaches, nightlife",
     },
+
+    {
+        "id": 2,
+        "origin": "Mumbai",
+        "cities": "Goa",
+        "date_range": "September 19-25, 2026",
+        "interests": "beaches, nightlife",
+    },
+    {
+        "id": 3,
+        "origin": "Kolkata",
+        "cities": "Mumbai , Goa",
+        "date_range": "September 19-22, 2026",
+        "interests": "beaches,historical places,art,cultural places,temples",
+    },
+
+    {
+        "id": 4,
+        "origin": "Delhi",
+        "cities": "Manali, Shimla, Rishikesh",
+        "date_range": "October 10-15, 2026",
+        "interests": "mountains, adventure sports, trekking, nature",
+    },
+     
+    {
+        "id": 5,
+        "origin": "Bangalore",
+        "cities": "Coorg, Wayanad",
+        "date_range": "November 5-7, 2026",
+        "interests": "nature, coffee plantations, wildlife, relaxation",
+    },
+
+    {
+        "id": 6,
+        "origin": "Bangalore",
+        "cities": "Coorg, Wayanad",
+        "date_range": "November 5-9, 2026",
+        "interests": "nature, coffee plantations, wildlife, relaxation",
+    },
+
+    {
+        "id": 7,
+        "origin": "Mumbai",
+        "cities": "Jaipur, Udaipur, Jodhpur",
+        "date_range": "December 20-27, 2026",
+        "interests": "history, forts, palaces, shopping, local cuisine",
+    },
+
+    {
+        "id": 8,
+        "origin": "Chennai",
+        "cities": "Pondicherry, Kerala backwaters",
+        "date_range": "January 3-7, 2027",
+        "interests": "beaches, relaxation, French heritage, food",
+        
+    },
+
+    {
+        "id": 9,
+        "origin": "Pune",
+        "cities": "Lonavala, Mahabaleshwar",
+        "date_range": "July 12-15, 2027",
+        "interests": "monsoon views, waterfalls, short trip, nature",
+        
+    },
+
+    {
+        "id": 10,
+        "origin": "New York",
+        "cities": "Paris, Amsterdam",
+        "date_range": "December 15-22, 2026",
+        "interests": "museums, art, architecture, cafes",
+        
+    },
+
+
+    {
+        "id": 11,
+        "origin": "Singapore",
+        "cities": "Bali, Bangkok",
+        "date_range": "September 8-14, 2026",
+        "interests": "beaches, temples, street food",
+        
+    },
+
+
+
+
 ]
 
 CHECK_KEYS = [
