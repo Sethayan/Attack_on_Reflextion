@@ -9,6 +9,9 @@ import chromadb
 from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
 from crewai import LLM
 
+# Self-Reflection model uses the larger reasoning model (Change 3)
+REASONING_LLM = "ollama/qwen3:14b"
+
 
 
 class OllamaEmbeddingWithTimeout(EmbeddingFunction[Documents]):
@@ -72,7 +75,7 @@ class ReflexionMemory:
         persist_dir: str = "./chroma_reflexion_db",
         ollama_url: str = "http://localhost:11434",
         embedding_model: str = "nomic-embed-text",
-        llm_model: str = "ollama/qwen2.5:7b",
+        llm_model: str = REASONING_LLM,
         collection_name: str = "reflexion_logs",
         embed_timeout: float = 120.0,
     ):
@@ -95,6 +98,8 @@ class ReflexionMemory:
         self._session_reflections: List[str] = []
         # Track content hashes to avoid storing duplicate reflections
         self._seen_hashes: set = set()
+        # Episode-level reflections (cleared each trial) — Change 2
+        self._episode_reflections: List[str] = []
 
     
 
@@ -287,6 +292,44 @@ class ReflexionMemory:
             === END OF SELF-REFLECTIONS ===
 
         """)
+
+    # ── Episode-level reflection (Change 2) ──────────────────────────
+
+    def reflect_episode(self, agent_name: str, agent_input: str,
+                        agent_output: str, mini_eval: dict) -> str:
+        """Generate a short, scoped reflection on ONE agent's step."""
+        prompt = (
+            f"You are reflecting on ONE step in a multi-agent trip-planning system.\n"
+            f"Agent: {agent_name}\n"
+            f"What it received: {agent_input[:2000]}\n"
+            f"What it produced: {agent_output[:2000]}\n"
+            f"Mini-evaluation of this step: {mini_eval}\n\n"
+            f"If there is a problem, give ONE short, specific correction for what "
+            f"{agent_name} (or the next agent) should do differently right now, "
+            f"in this same trial. If there is no problem, say 'No issue.'"
+        )
+        return self._llm.call(prompt)
+
+    def store_episode_reflection(self, reflection: str):
+        """Append to the current trial's episode-level reflection buffer (cleared each trial)."""
+        if reflection.strip().lower() != "no issue.":
+            self._episode_reflections.append(reflection)
+
+    def get_episode_context(self) -> str:
+        """Return the accumulated episode reflections for injection into the next agent's task."""
+        if not self._episode_reflections:
+            return ""
+        return (
+            "=== CORRECTIONS FROM EARLIER STEPS THIS TRIAL ===\n"
+            + "\n---\n".join(self._episode_reflections)
+            + "\n=== END CORRECTIONS ===\n"
+        )
+
+    def clear_episode_reflections(self):
+        """Clear episode-level reflections at the start of each new trial."""
+        self._episode_reflections = []
+
+    # ── Combined reflect + store ────────────────────────────────────
 
     def reflect_and_store(
         self,

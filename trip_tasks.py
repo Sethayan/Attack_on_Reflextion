@@ -121,5 +121,30 @@ class TripTasks:
             expected_output=f"Complete {num_days}-day travel plan with Day 1 through Day {num_days} headers, daily schedule, weather conditions, packing suggestions, and budget breakdown"
         )
 
+    def weather_task(self, agent, cities, range, extra_context=""):
+        return Task(
+            description=dedent(f"""\
+                {extra_context}
+                Look up the weather forecast for {cities} during {range}.
+                Report expected conditions, temperature range, and any severe
+                weather risk. Recommend packing adjustments based on the forecast.
+            """),
+            agent=agent,
+            expected_output="Weather forecast summary with packing recommendations",
+        )
+
+    def messaging_task(self, agent, extra_context=""):
+        return Task(
+            description=dedent(f"""\
+                {extra_context}
+                Compose a short, friendly message to the traveler summarizing the
+                finalized plan and confirming next steps. Do not invent booking
+                confirmations, prices, or contact details that were not provided
+                to you by the Travel Concierge.
+            """),
+            agent=agent,
+            expected_output="A user-facing summary message",
+        )
+
     def __tip_section(self):
         return "If you do your BEST WORK, I'll tip you $100!"

@@ -1,4 +1,0 @@
-test_case,trial,overall_pass,accuracy,checks_passed,checks_applicable,budget_ok,days_ok,no_duplicates,constraints_ok,feasible,no_hallucination,failure_reasons,execution_time_s
-1,0,False,0.8,4,5,not_applicable,True,False,True,True,True,"no_duplicates: Duplicate venues across days: '-' in ['day 1', 'day 2', 'day 3']; '## evening:
--' in ['day 1', 'day 2', 'day 3']",188.7
-1,1,False,0.8,4,5,not_applicable,True,False,True,True,True,"no_duplicates: Duplicate venues across days: '-' in ['day 1', 'day 2', 'day 3', 'day 4']; 'activity' in ['day 1', 'day 2', 'day 3', 'day 4']; 'lunch' in ['day 1', 'day 2', 'day 3', 'day 4']",390.1

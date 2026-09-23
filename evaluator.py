@@ -6,18 +6,17 @@ from typing import Any, Dict, List, Optional, Tuple
 from crewai import LLM
 
 
-
+# ── Budget check ─────────────────────────────────────────────────────
 
 def _extract_budget_from_input(task_input: dict) -> Optional[float]:
     """Try to find a numeric budget cap in the task input fields."""
-    
+
     if "budget" in task_input and task_input["budget"]:
         raw = str(task_input["budget"])
         nums = re.findall(r"[\d,]+(?:\.\d+)?", raw.replace(",", ""))
         if nums:
             return float(nums[0])
 
-    
     combined = " ".join(str(v) for v in task_input.values())
     patterns = [
         r"budget\s*(?:of|is|:)?\s*\$?([\d,]+(?:\.\d+)?)",
@@ -35,7 +34,6 @@ def _extract_budget_from_input(task_input: dict) -> Optional[float]:
 def _extract_totals_from_output(output_text: str) -> List[float]:
     """Extract dollar/currency amounts near 'total', 'budget', 'cost'."""
     totals = []
-    
     for line in output_text.split("\n"):
         lower = line.lower()
         if any(kw in lower for kw in ["total", "budget", "overall cost", "grand total", "estimated cost"]):
@@ -45,13 +43,12 @@ def _extract_totals_from_output(output_text: str) -> List[float]:
             )
             for a in amounts:
                 val = float(a.replace(",", ""))
-                if val > 10:  
+                if val > 10:
                     totals.append(val)
     return totals
 
 
 def check_budget(task_input: dict, output_text: str) -> dict:
-   
     budget_cap = _extract_budget_from_input(task_input)
     if budget_cap is None:
         return {"result": "not_applicable", "reason": "No budget specified in input."}
@@ -69,18 +66,17 @@ def check_budget(task_input: dict, output_text: str) -> dict:
     return {"result": True, "reason": ""}
 
 
+# ── Day-count / day-splitting (FIXED — shared header detector) ──────
+
 def _parse_trip_length(task_input: dict) -> Optional[int]:
-    
     date_range = str(task_input.get("date_range", ""))
 
-    
     m = re.search(r"(\d{1,2})\s*[-–]\s*(\d{1,2})", date_range)
     if m:
         start, end = int(m.group(1)), int(m.group(2))
         if end > start:
             return end - start + 1
 
-    
     m = re.search(r"(\d+)\s*[-]?\s*days?", date_range, re.IGNORECASE)
     if m:
         return int(m.group(1))
@@ -88,60 +84,92 @@ def _parse_trip_length(task_input: dict) -> Optional[int]:
     return None
 
 
+_ORDINAL_WORDS = {
+    "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5,
+    "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10,
+}
+
+
+def _find_day_headers(output_text: str) -> List[Tuple[int, int, str]]:
+    """
+    Find every recognizable day-header LINE in the text, returning
+    (character_position, day_number, matched_text) for each, sorted by
+    position.
+
+    Anchored to the start of a line (allowing markdown '#' and '**'
+    prefixes) so it does NOT match incidental mentions of 'day' inside
+    prose, e.g. "a 6-day trip to Manali" or "October 10 to 15" — this is
+    the bug that previously caused check_days and check_no_duplicates to
+    disagree with each other.
+    """
+    headers: List[Tuple[int, int, str]] = []
+
+    # Pattern 1: numeric headers — "Day 1", "## Day 1:", "**Day 2**", "Day 3 -"
+    for m in re.finditer(
+        r'^[ \t]*#{0,4}[ \t]*\*{0,2}[ \t]*day[ \t]*(\d{1,2})\b',
+        output_text, re.IGNORECASE | re.MULTILINE,
+    ):
+        headers.append((m.start(), int(m.group(1)), m.group(0).strip()))
+
+    # Pattern 2 (only if no numeric headers found): spelled-out ordinals —
+    # "Day One", "First Day"
+    if not headers:
+        pattern = (
+            r'^[ \t]*#{0,4}[ \t]*\*{0,2}[ \t]*'
+            r'(?:day[ \t]+(' + '|'.join(_ORDINAL_WORDS.keys()) + r')'
+            r'|(' + '|'.join(_ORDINAL_WORDS.keys()) + r')[ \t]+day)\b'
+        )
+        for m in re.finditer(pattern, output_text, re.IGNORECASE | re.MULTILINE):
+            word = (m.group(1) or m.group(2)).lower()
+            headers.append((m.start(), _ORDINAL_WORDS[word], m.group(0).strip()))
+
+    headers.sort(key=lambda h: h[0])
+    return headers
+
+
 def _count_days_in_output(output_text: str) -> int:
-    
+    # Primary: use the same robust header detector _split_into_day_sections
+    # relies on, so check_days and check_no_duplicates always agree.
+    headers = _find_day_headers(output_text)
+    if headers:
+        return len({day_num for _, day_num, _ in headers})
+
+    # Fallback chain — only runs if NO proper day headers exist at all.
+    # Kept as a last resort for genuinely unstructured output; these are
+    # weaker signals and can be noisy (e.g. calendar dates), which is why
+    # they are tried only after the header-based detection fails.
     day_nums = set()
 
-    
-    for m in re.finditer(r"\bday\s*(\d+)\b", output_text, re.IGNORECASE):
-        day_nums.add(int(m.group(1)))
-
-    if day_nums:
-        return len(day_nums)
-
-    
     months = (
         r"(?:january|february|march|april|may|june|july|august|september|"
         r"october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)"
     )
-    
     for m in re.finditer(months + r"\s+(\d{1,2})\b", output_text, re.IGNORECASE):
         day_nums.add(int(m.group(1)))
-    
     for m in re.finditer(
         r"\b(\d{1,2})(?:st|nd|rd|th)?\s+" + months, output_text, re.IGNORECASE
     ):
         day_nums.add(int(m.group(1)))
-
     if day_nums:
         return len(day_nums)
 
-    
     weekdays = set()
     for m in re.finditer(
         r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
         output_text, re.IGNORECASE,
     ):
         weekdays.add(m.group(1).lower())
-
     if weekdays:
         return len(weekdays)
 
-    
-    ordinals = {
-        "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5,
-        "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10,
-    }
-    for word, num in ordinals.items():
+    for word, num in _ORDINAL_WORDS.items():
         if re.search(rf"\b{word}\s+day\b", output_text, re.IGNORECASE):
             day_nums.add(num)
     for m in re.finditer(r"\b(\d{1,2})(?:st|nd|rd|th)\s+day\b", output_text, re.IGNORECASE):
         day_nums.add(int(m.group(1)))
-
     if day_nums:
         return len(day_nums)
 
-    
     heading_count = 0
     for m in re.finditer(
         r"^(?:#{1,4}\s+.+|(?:\*\*).+(?:\*\*))$", output_text, re.MULTILINE
@@ -152,8 +180,6 @@ def _count_days_in_output(output_text: str) -> int:
             for kw in ["morning", "afternoon", "evening", "arrival", "departure", "itinerary"]
         ):
             heading_count += 1
-
-    
     if heading_count >= 2:
         return max(1, heading_count // 3) or heading_count
 
@@ -161,7 +187,6 @@ def _count_days_in_output(output_text: str) -> int:
 
 
 def check_days(task_input: dict, output_text: str) -> dict:
-    
     expected = _parse_trip_length(task_input)
     if expected is None:
         return {"result": "not_applicable", "reason": "Could not parse trip length from input."}
@@ -170,7 +195,6 @@ def check_days(task_input: dict, output_text: str) -> dict:
     if actual == 0:
         return {"result": False, "reason": "No day markers found in output (tried Day N, dates, weekdays, ordinals)."}
 
-    
     if abs(actual - expected) <= 1:
         return {"result": True, "reason": ""}
 
@@ -180,26 +204,33 @@ def check_days(task_input: dict, output_text: str) -> dict:
     }
 
 
-
 def _split_into_day_sections(output_text: str) -> Dict[str, str]:
-    
-    sections = {}
-    
-    parts = re.split(r"(?i)\b(day\s*\d+)\b", output_text)
-    current_day = None
-    for part in parts:
-        if re.match(r"(?i)day\s*\d+", part.strip()):
-            current_day = part.strip().lower()
-            sections[current_day] = ""
-        elif current_day:
-            sections[current_day] += part
+    """
+    Split the itinerary into day sections using the same robust header
+    detection used by check_days (_find_day_headers), instead of matching
+    any bare 'day N' substring anywhere in the text. This keeps the two
+    checks consistent with each other, and avoids both:
+      - false negatives (missing headers like '## Day 1' or 'Day One')
+      - false positives (treating 'a 6-day trip' as a day marker)
+    """
+    headers = _find_day_headers(output_text)
+    if len(headers) < 2:
+        return {}
+
+    sections: Dict[str, str] = {}
+    for i, (start, day_num, _label) in enumerate(headers):
+        end = headers[i + 1][0] if i + 1 < len(headers) else len(output_text)
+        key = f"day {day_num}"
+        # If a day number appears more than once (rare LLM formatting slip),
+        # append rather than overwrite, so no content is silently lost.
+        sections[key] = sections.get(key, "") + output_text[start:end]
+
     return sections
 
 
 def _extract_venue_names(text: str) -> List[str]:
-    
-    
-    TIME_PATTERN = re.compile(r'^\d{1,2}[:.]\d{2}')  
+
+    TIME_PATTERN = re.compile(r'^\d{1,2}[:.]\d{2}')
     GENERIC_PATTERN = re.compile(
         r'^(weather forecast|packing suggestion|budget breakdown|'
         r'morning|afternoon|evening|night|total|high temp|low temp|'
@@ -211,14 +242,13 @@ def _extract_venue_names(text: str) -> List[str]:
         r'arrival|check.?in|check.?out|summary|conclusion|overview|'
         r'introduction|final answer|temperature range|flight cost|'
         r'round.?trip flight|overall description|average daily|'
-        r'hotel|hostel|airbnb|resort|guest.?house|'  
+        r'hotel|hostel|airbnb|resort|guest.?house|'
         r'transport|metro|bus|taxi|uber|lyft)',
         re.IGNORECASE
     )
 
     venues = []
 
-    
     for m in re.finditer(
         r'(?:visit|go to|explore|dine at|eat at|lunch at|dinner at|'
         r'breakfast at|see|tour|check out|head to|stop at|try)\s+'
@@ -234,7 +264,6 @@ def _extract_venue_names(text: str) -> List[str]:
             and not GENERIC_PATTERN.match(name)):
             venues.append(name.lower())
 
-    
     for m in re.finditer(r'\*([^*]{5,60})\*', text):
         name = m.group(1).strip().rstrip(':.,;')
         if (not TIME_PATTERN.match(name)
@@ -242,11 +271,10 @@ def _extract_venue_names(text: str) -> List[str]:
             and not name[0].isdigit()):
             venues.append(name.lower())
 
-    
     for m in re.finditer(r'\*\*([^*]+)\*\*', text):
         name = m.group(1).strip().rstrip(':.,;')
         name_lower = name.lower()
-    
+
         has_caps = sum(1 for w in name.split() if w[0:1].isupper()) >= 2
         if (len(name) > 4
             and has_caps
@@ -266,18 +294,15 @@ def _extract_venue_names(text: str) -> List[str]:
 
 
 def check_no_duplicates(task_input: dict, output_text: str) -> dict:
-   
     sections = _split_into_day_sections(output_text)
     if len(sections) < 2:
         return {"result": "not_applicable", "reason": "Could not split output into day sections."}
 
-    
     venue_days = defaultdict(set)
     for day_label, text in sections.items():
         for venue in _extract_venue_names(text):
             venue_days[venue].add(day_label)
 
-   
     duplicates = {v: sorted(days) for v, days in venue_days.items()
                   if len(days) >= 3}
 
@@ -291,7 +316,6 @@ def check_no_duplicates(task_input: dict, output_text: str) -> dict:
 
 
 def run_heuristic_checks(task_input: dict, output_text: str) -> dict:
-   
     budget = check_budget(task_input, output_text)
     days = check_days(task_input, output_text)
     dupes = check_no_duplicates(task_input, output_text)
@@ -305,7 +329,7 @@ def run_heuristic_checks(task_input: dict, output_text: str) -> dict:
     }
 
 
-
+# ── LLM judge ─────────────────────────────────────────────────────
 
 # Judge LLM — intentionally different from agent model to avoid self-grading
 _judge_llm = LLM(
@@ -316,7 +340,6 @@ _judge_llm = LLM(
 
 
 def _parse_judge_json(raw: str) -> Optional[dict]:
-    
     cleaned = raw.strip()
     cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
     cleaned = re.sub(r"\s*```$", "", cleaned)
@@ -325,7 +348,6 @@ def _parse_judge_json(raw: str) -> Optional[dict]:
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        
         m = re.search(r"\{[^{}]*\}", cleaned, re.DOTALL)
         if m:
             try:
@@ -346,7 +368,6 @@ def run_llm_judge(task_input: dict, output_text: str) -> dict:
     if task_input.get("constraints"):
         input_summary += f"Constraints: {task_input['constraints']}\n"
 
-    # Truncate output to fit context window
     truncated_output = output_text[:6000]
 
     prompt = (
@@ -406,17 +427,14 @@ def run_llm_judge(task_input: dict, output_text: str) -> dict:
     }
 
 
-
-#  Combined Evaluator
+# ── Combined evaluator ────────────────────────────────────────────
 
 def evaluate(task_input: dict, output_text: str) -> dict:
-    
     heuristic_results = run_heuristic_checks(task_input, output_text)
     judge_results = run_llm_judge(task_input, output_text)
 
-    
     check_keys = ["budget_ok", "days_ok", "no_duplicates",
-                   "constraints_ok", "feasible", "no_hallucination"]
+                  "constraints_ok", "feasible", "no_hallucination"]
 
     all_checks = {**heuristic_results, **judge_results}
 
@@ -426,7 +444,6 @@ def evaluate(task_input: dict, output_text: str) -> dict:
 
     for k in check_keys:
         val = all_checks.get(k)
-        
         if val == "not_applicable" or val is None:
             continue
         checks_applicable += 1
@@ -446,4 +463,31 @@ def evaluate(task_input: dict, output_text: str) -> dict:
         "checks_applicable": checks_applicable,
         "failure_reasons": failure_reasons,
         **all_checks,
+    }
+
+
+# ── Episode-level evaluator (Change 2) ─────────────────────────────
+
+def extract_venue_names(text: str) -> set:
+    """Extract venue names from agent output text.
+
+    Reuses the existing _extract_venue_names() helper and returns a set
+    for easy intersection/union operations.
+    """
+    return set(_extract_venue_names(text))
+
+
+def evaluate_episode(agent_name: str, agent_output: str, seen_venues: set) -> dict:
+    """Cheap, rule-based check on a single agent's output.
+
+    Detects venues that have already appeared in earlier agent steps
+    within the same trial, flagging duplicates immediately so the next
+    agent can be warned via episode-level reflection.
+    """
+    new_venues = extract_venue_names(agent_output)
+    duplicates = new_venues & seen_venues
+    seen_venues.update(new_venues)
+    return {
+        "duplicates_found": list(duplicates),
+        "ok": len(duplicates) == 0,
     }

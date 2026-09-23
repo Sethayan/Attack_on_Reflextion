@@ -1,4 +1,4 @@
-from crewai import Crew
+from crewai import Crew, Process
 from trip_agents import TripAgents
 from trip_tasks import TripTasks
 from reflexion_memory import ReflexionMemory
@@ -20,11 +20,15 @@ class TripCrew:
         agents = TripAgents()
         tasks = TripTasks()
 
+        # Spoke agents
         city_selector_agent = agents.city_selection_agent()
         local_expert_agent = agents.local_expert()
+        weather_agent = agents.weather_agent()
+        messaging_agent = agents.messaging_agent()
+
+        # Hub / manager
         travel_concierge_agent = agents.travel_concierge()
 
-        
         memory = ReflexionMemory()
         task_description = (
             f"Plan a trip from {self.origin} to one of {self.cities} "
@@ -33,7 +37,6 @@ class TripCrew:
 
         past_reflections = memory.retrieve_relevant(task_description)
         reflexion_context = memory.build_reflexion_context(task_description)
-    
 
         identify_task = tasks.identify_task(
             city_selector_agent,
@@ -50,6 +53,12 @@ class TripCrew:
             self.date_range,
             extra_context=reflexion_context,
         )
+        weather_task = tasks.weather_task(
+            weather_agent,
+            self.cities,
+            self.date_range,
+            extra_context=reflexion_context,
+        )
         plan_task = tasks.plan_task(
             travel_concierge_agent,
             self.origin,
@@ -57,19 +66,26 @@ class TripCrew:
             self.date_range,
             extra_context=reflexion_context,
         )
+        message_task = tasks.messaging_task(
+            messaging_agent,
+            extra_context=reflexion_context,
+        )
 
         crew = Crew(
             agents=[
-                city_selector_agent, local_expert_agent, travel_concierge_agent
+                city_selector_agent, local_expert_agent,
+                weather_agent, messaging_agent,
             ],
-            tasks=[identify_task, gather_task, plan_task],
-            verbose=True
+            tasks=[identify_task, gather_task, weather_task,
+                   plan_task, message_task],
+            process=Process.hierarchical,
+            manager_agent=travel_concierge_agent,
+            verbose=True,
         )
 
         result = crew.kickoff()
         output_text = str(result)
 
-    
         task_input = {
             "origin": self.origin,
             "cities": self.cities,
@@ -80,9 +96,7 @@ class TripCrew:
         print(f"\n📊 Accuracy: {eval_result['accuracy']:.2f} "
               f"({eval_result['checks_passed']}/{eval_result['checks_applicable']} checks)")
 
-
         memory.reflect_and_store(task_description, output_text, eval_result)
-        
 
         return result
 

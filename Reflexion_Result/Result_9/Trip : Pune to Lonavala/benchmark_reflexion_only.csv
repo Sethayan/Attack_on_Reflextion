@@ -1,2 +1,0 @@
-test_case,trial,overall_pass,accuracy,checks_passed,checks_applicable,budget_ok,days_ok,no_duplicates,constraints_ok,feasible,no_hallucination,failure_reasons,execution_time_s
-1,0,True,1.0,5,5,not_applicable,True,True,True,True,True,,215.4
